@@ -1,29 +1,14 @@
 # README #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+### build ###
+* docker build -t <image_namge> .
+* docker save <image_name> --output <image_name>.tar
 
-### What is this repository for? ###
+### prerequist ###
+* config.yml needs to be generated correctly before calling the docker containter to enroll.
+* <ROUTER_NAME>.jwt is under the same dir.
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
-
-### How do I get set up? ###
-
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
-
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
+### Start the docker ###
+* load the image: docker image load -i <ROUTER_NAME>.tar
+assume you put the "config.yml" and jwt under "router1" directory, to start the docker container:
+* docker run -v /home/ziggy/router2/:/etc/netfoundry/ --env NF_REG_NAME=<ROUTER_NAME> --dns="8.8.8.8" <image_name>
