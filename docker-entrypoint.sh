@@ -18,18 +18,56 @@
 
 set -e -u -o pipefail
 
-# Ensure that ziti-edge-tunnel's identity is stored on a volume
-# so we don't throw away the one-time enrollment token
+LOGFILE="ziti-router.log"
 
-#IDENTITIES_DIR="/ziti-edge-tunnel"
-#if ! mountpoint "${IDENTITIES_DIR}" &>/dev/null; then
-#    echo "ERROR: please run this image with a volume mounted on ${IDENTITIES_DIR}" >&2
-#    exit 1
-#fi
+get_controller_version()
+{
+    echo "Check ziti controller verion"
+    CONTROLLER_ADDRESS=$(cat config.yml |  grep "endpoint" |awk -F ':' '{print $3}')
 
-# if identity file, else multiple identities dir
+    echo -e "controller_address: ${CONTROLLER_ADDRESS}"
+
+    if [ -z $CONTROLLER_ADDRESS ]
+    then
+        echo "No controller address found, no upgrade"
+    else
+        CONTROLLER_VERSION=$(curl -s -k -H -X "https://${CONTROLLER_ADDRESS}:1280/edge/v1/version" |jq -r .data.version)
+        ### if no jq, use:
+        #versiondata=$(curl -k -s $VERSION_ADDRESS)
+        #new_controller_version=$(echo $versiondata | tr { '\n' | tr , '\n' | tr } '\n' | grep "version" | awk  -F'"' '{print $4}')
+    fi
+
+    echo -e "controller_version: ${CONTROLLER_VERSION}"
+}
+
+upgrade_ziti_router()
+{
+    upgrade_release="${CONTROLLER_VERSION:1}"
+    echo -e "Upgrading ziti version to ${upgrade_release}"
+    upgradelink="https://github.com/openziti/ziti/releases/download/v"${upgrade_release}"/ziti-linux-amd64-"${upgrade_release}".tar.gz"
+    echo -e "version link: ${upgradelink}"
+
+    rm -f ziti-linux.tar.gz
+
+    curl -L -s -o ziti-linux.tar.gz ${upgradelink}
+
+    ## maybe check if the file is downloaded?
+
+    mkdir -p ziti
+    rm -f ziti/ziti-router
+
+    #extract ziti-router
+    tar xf ziti-linux.tar.gz ziti/ziti-router
+    chmod +x ziti/ziti-router
+    mv ziti/ziti-router .
+
+    #cleanup the download
+    rm ziti-linux.tar.gz
+}
+
+# look to see if the ziti-router is already registered
 cd /etc/netfoundry/
-echo ${NF_REG_NAME}
+
 if [[ -n "${NF_REG_NAME:-}" ]]; then
     CERT_FILE="certs/identity.cert.pem"
     if [[ -s "${CERT_FILE}" ]]; then
@@ -56,24 +94,9 @@ if [[ -n "${NF_REG_NAME:-}" ]]; then
     fi
 fi
 
-echo "Check ziti-router verion"
-CONTROLLER_ADDRESS=$(cat config.yml |  grep "endpoint" |awk -F ':' '{print $3}')
 
-echo -e "controller_address: ${CONTROLLER_ADDRESS}"
+get_controller_version
 
-if [ -z $CONTROLLER_ADDRESS ]
-then
-   echo "No controller address found, no upgrade"
-fi
-
-# probable need to do elif
-CONTROLLER_VERSION=$(curl -s -k -H -X "https://${CONTROLLER_ADDRESS}:1280/edge/v1/version" |jq -r .data.version)
-
-
-echo -e "controller_version: ${CONTROLLER_VERSION}"
-### if no jq, use:
-#versiondata=$(curl -k -s $VERSION_ADDRESS)
-#new_controller_version=$(echo $versiondata | tr { '\n' | tr , '\n' | tr } '\n' | grep "version" | awk  -F'"' '{print $4}')
 
 if [[ -f "ziti-router" ]]; then
     ZITI_VERSION=$(./ziti-router version 2>/dev/null)
@@ -87,30 +110,26 @@ echo Router version: $ZITI_VERSION
 if [ "$CONTROLLER_VERSION" == "$ZITI_VERSION" ]; then
     echo "Ziti version match, no download necessary"
 else
-    upgrade_release="${CONTROLLER_VERSION:1}"
-    echo -e "Upgrading ziti version to ${upgrade_release}"
-    upgradelink="https://github.com/openziti/ziti/releases/download/v"${upgrade_release}"/ziti-linux-amd64-"${upgrade_release}".tar.gz"
-    echo -e "version link: ${upgradelink}"
-
-    rm -f ziti-linux.tar.gz
-
-    curl -L -s -o ziti-linux.tar.gz ${upgradelink}
-
-    ## maybe check if the file is downloaded?
-
-    mkdir -p ziti
-    rm -f ziti/ziti-router
-
-    #extract ziti-router
-    tar xf ziti-linux.tar.gz ziti/ziti-router
-    chmod +x ziti/ziti-router
-    mv ziti/ziti-router .
-
-    #cleanup the download
-    rm ziti-linux.tar.gz
+    upgrade_ziti_router
 fi
 
 echo "INFO: running ziti-router"
+ZITI_VERSION=$(./ziti-router version 2>/dev/null)
+/opt/netfoundry/ziti/ziti-router/ziti-router run config.yml >$LOGFILE 2>&1 &
 
 set -x
-/opt/netfoundry/ziti/ziti-router/ziti-router run config.yml
+while true; do
+    sleep 60
+    get_controller_version
+
+    if [ "$CONTROLLER_VERSION" != "$ZITI_VERSION" ]; then
+        pkill ziti-router
+        upgrade_ziti_router
+        ZITI_VERSION=$(./ziti-router version 2>/dev/null)
+        echo "INFO: restarting ziti-router"
+        /opt/netfoundry/ziti/ziti-router/ziti-router run config.yml >>$LOGFILE 2>&1 &
+    fi
+done
+    
+    
+
