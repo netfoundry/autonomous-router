@@ -1,5 +1,9 @@
 FROM ubuntu:focal
 
+RUN apt update
+RUN apt install -y jq
+RUN apt install -y curl
+
 RUN mkdir -p /opt/netfoundry/ziti/ziti-router
 ADD ziti-router /opt/netfoundry/ziti/ziti-router/
 
