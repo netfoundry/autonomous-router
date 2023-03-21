@@ -16,6 +16,9 @@
 # limitations under the License.
 #
 
+# This version supports ziti 0.27.1 or above.  we are using single binary for
+# all ziti functionality now
+
 set -e -u -o pipefail
 
 LOGFILE="ziti-router.log"
@@ -83,15 +86,15 @@ download_ziti_binary()
     ## maybe check if the file is downloaded?
 
     mkdir -p ziti
-    rm -f ziti/ziti-router
+    #rm -f ziti/ziti-router
     rm -f ziti/ziti
 
     #extract ziti-router
-    tar xf ziti-linux.tar.gz ziti/ziti-router
+    #tar xf ziti-linux.tar.gz ziti/ziti-router
     tar xf ziti-linux.tar.gz ziti/ziti
-    chmod +x ziti/ziti-router
+    #chmod +x ziti/ziti-router
     chmod +x ziti/ziti
-    mv ziti/ziti-router .
+    #mv ziti/ziti-router .
     # mv ziti/ziti .
 
     #cleanup the download
@@ -144,7 +147,7 @@ if [[ -n "${REG_KEY:-}" ]]; then
         create_router_config
         # save jwt retrieved from console, and register router
         echo $jwt > docker.jwt
-        ./ziti-router enroll config.yml -j docker.jwt
+        ziti/ziti router enroll config.yml -j docker.jwt
     fi
 else
     if [[ -s "${CERT_FILE}" ]]; then
@@ -159,8 +162,8 @@ fi
 # now check if edge router version is same as controller
 get_controller_version
 
-if [[ -f "ziti-router" ]]; then
-    ZITI_VERSION=$(./ziti-router version 2>/dev/null)
+if [[ -f "ziti/ziti" ]]; then
+    ZITI_VERSION=$(ziti/ziti -v 2>/dev/null)
 else
     ZITI_VERSION="Not Found"
 fi
@@ -175,8 +178,8 @@ else
 fi
 
 echo "INFO: running ziti-router"
-ZITI_VERSION=$(./ziti-router version 2>/dev/null)
-./ziti-router run config.yml >$LOGFILE 2>&1 &
+ZITI_VERSION=$(ziti/ziti -v 2>/dev/null)
+ziti/ziti router run config.yml >$LOGFILE 2>&1 &
 
 set -x
 while true; do
@@ -187,11 +190,11 @@ while true; do
         echo "Controller version not found, skip upgrade check"
     else
         if [ "$CONTROLLER_VERSION" != "$ZITI_VERSION" ]; then
-            pkill ziti-router
+            pkill ziti
             upgrade_ziti_router
-            ZITI_VERSION=$(./ziti-router version 2>/dev/null)
+            ZITI_VERSION=$(ziti/ziti -v 2>/dev/null)
             echo "INFO: restarting ziti-router"
-            ./ziti-router run config.yml >>$LOGFILE 2>&1 &
+            ziti/ziti router run config.yml >>$LOGFILE 2>&1 &
         fi
     fi
 done
