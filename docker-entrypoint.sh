@@ -109,10 +109,15 @@ upgrade_ziti_router()
     echo -e "Upgrading ziti version to ${upgrade_release}"
     response=$(curl -k -d -H "Accept: application/json" -X GET https://gateway.production.netfoundry.io/core/v2/network-versions?zitiVersion=${upgrade_release})
     #upgradelink="https://github.com/openziti/ziti/releases/download/v"${upgrade_release}"/ziti-linux-amd64-"${upgrade_release}".tar.gz"
-
+    
+    aarch=$(uname -m)
     echo ${response} > mopresponse.json
     if jq -e . >/dev/null 2>&1 <<<"${response}"; then
-        upgradelink=$(echo ${response} | jq -r '._embedded["network-versions"][0].jsonNode.zitiBinaryBundleLinuxAMD64')
+	if [[ $aarch == "aarch64" ]]; then
+            upgradelink=$(echo ${response} | jq -r '._embedded["network-versions"][0].jsonNode.zitiBinaryBundleLinuxARM64')
+        else
+            upgradelink=$(echo ${response} | jq -r '._embedded["network-versions"][0].jsonNode.zitiBinaryBundleLinuxAMD64')
+        fi
         download_ziti_binary
     else
         echo "!!!!!!!!!!Retrieve from console Failed."
@@ -125,6 +130,7 @@ upgrade_ziti_router()
 # look to see if the ziti-router is already registered
 cd /etc/netfoundry/
 
+aarch=$(uname -m)
 CERT_FILE="certs/client.cert"
 if [[ -n "${REG_KEY:-}" ]]; then
     if [[ -s "${CERT_FILE}" ]]; then
@@ -136,7 +142,11 @@ if [[ -n "${REG_KEY:-}" ]]; then
         echo $response >reg_response
         jwt=$(echo $response |jq -r .edgeRouter.jwt)
         networkControllerHost=$(echo $response |jq -r .networkControllerHost)
-        upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxAMD64)
+	if [[ $aarch == "aarch64" ]]; then
+            upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxARM64)
+        else
+            upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxAMD64)
+        fi
         #echo $jwt
         #echo $networkControllerHost
         #echo $upgradelink
