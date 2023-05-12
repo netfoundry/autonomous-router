@@ -115,6 +115,8 @@ upgrade_ziti_router()
     if jq -e . >/dev/null 2>&1 <<<"${response}"; then
 	if [[ $aarch == "aarch64" ]]; then
             upgradelink=$(echo ${response} | jq -r '._embedded["network-versions"][0].jsonNode.zitiBinaryBundleLinuxARM64')
+        elif [[ $aarch == "armv7l" ]]; then
+            upgradelink=$(echo ${response} | jq -r '._embedded["network-versions"][0].jsonNode.zitiBinaryBundleLinuxARM')
         else
             upgradelink=$(echo ${response} | jq -r '._embedded["network-versions"][0].jsonNode.zitiBinaryBundleLinuxAMD64')
         fi
@@ -131,6 +133,7 @@ upgrade_ziti_router()
 cd /etc/netfoundry/
 
 aarch=$(uname -m)
+echo $aarch
 CERT_FILE="certs/client.cert"
 if [[ -n "${REG_KEY:-}" ]]; then
     if [[ -s "${CERT_FILE}" ]]; then
@@ -144,6 +147,8 @@ if [[ -n "${REG_KEY:-}" ]]; then
         networkControllerHost=$(echo $response |jq -r .networkControllerHost)
 	if [[ $aarch == "aarch64" ]]; then
             upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxARM64)
+        elif [[ $aarch == "armv7l" ]]; then
+            upgradelink=$(echo ${response} | jq -r .productMetadata.zitiBinaryBundleLinuxARM)
         else
             upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxAMD64)
         fi
