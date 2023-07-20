@@ -60,6 +60,7 @@ create_router_config()
     export ZITI_ROUTER_PORT=443
     
 
+    ls -la /opt/openziti/bin
     /opt/openziti/bin/ziti create config router edge --private -n "docker" -o config.yml
 }
 

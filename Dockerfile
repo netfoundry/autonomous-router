@@ -1,6 +1,6 @@
 FROM ubuntu:jammy
 
-RUN apt update
+RUN apt update && apt-get install -y
 RUN apt install -y jq
 RUN apt install -y curl
 RUN apt install -y procps
