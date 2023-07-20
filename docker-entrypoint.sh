@@ -22,7 +22,9 @@
 # 7/19/2023
 # Support ziti version 0.29.0 tarball
 # move executable to /opt/openziti/bin (for execution)
-# remove dump debug to logfile.
+# direct ziti output to the container. user can now retrieve log with 
+#    docker logs -f <container>
+# monitor ziti process, if process goes away, restart it
 
 set -e -o pipefail
 
@@ -263,6 +265,15 @@ while true; do
             echo "INFO: restarting ziti-router"
             /opt/openziti/bin/ziti router run config.yml $OPS &
         fi
+    fi
+
+    ## check if ziti is running or not
+    if pgrep -x "ziti" > /dev/null
+    then
+        echo ziti is running
+    else
+        # ziti not running, restart
+        /opt/openziti/bin/ziti router run config.yml $OPS &
     fi
 done
     
