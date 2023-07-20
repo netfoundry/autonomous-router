@@ -19,7 +19,12 @@
 # This version supports ziti 0.27.1 or above.  we are using single binary for
 # all ziti functionality now
 
-set -e -u -o pipefail
+# 7/19/2023
+# Support ziti version 0.29.0 tarball
+# move executable to /opt/openziti/bin (for execution)
+# remove dump debug to logfile.
+
+set -e -o pipefail
 
 LOGFILE="ziti-router.log"
 
@@ -41,12 +46,19 @@ create_router_config()
     export ZITI_CTRL_ADVERTISED_ADDRESS=${networkControllerHost}
     #controller port (default)
     export ZITI_CTRL_PORT="80"
+    # 0.29.0 renamed environment variable
+    export ZITI_CTRL_ADVERTISED_PORT="80"
 
     # router ip and port to put in config
     export ZITI_EDGE_ROUTER_IP_OVERRIDE=${localip}
     export ZITI_EDGE_ROUTER_PORT=443
 
-    ziti/ziti create config router edge --private -n "docker" -o config.yml
+    # 0.29.0 renamed environment variable
+    export ZITI_ROUTER_IP_OVERRIDE=${localip}
+    export ZITI_ROUTER_PORT=443
+    
+
+    /opt/openziti/bin/ziti create config router edge --private -n "docker" -o config.yml
 }
 
 get_controller_version()
@@ -77,6 +89,7 @@ get_controller_version()
 # download ziti binary from the link saved in "upgradelink"
 download_ziti_binary()
 {
+    
     echo -e "version link: ${upgradelink}"
 
     rm -f ziti-linux.tar.gz
@@ -85,25 +98,33 @@ download_ziti_binary()
 
     ## maybe check if the file is downloaded?
 
-    mkdir -p ziti
-    #rm -f ziti/ziti-router
-    rm -f ziti/ziti
+    rm -f ziti
 
-    #extract ziti-router
-    #tar xf ziti-linux.tar.gz ziti/ziti-router
-    tar xf ziti-linux.tar.gz ziti/ziti
-    #chmod +x ziti/ziti-router
-    chmod +x ziti/ziti
-    #mv ziti/ziti-router .
-    # mv ziti/ziti .
+    #base on the verion, we extract the right ziti out of the tarball
+    controller_dot_version=$(echo $CONTROLLER_VERSION| awk -F "." '{print $2}')
+
+    if [ "$controller_dot_version" -lt "29" ]; then
+        tar xf ziti-linux.tar.gz ziti/ziti --strip-components 1
+    else
+        tar xf ziti-linux.tar.gz ziti
+    fi
+
+    # change it to be executable
+    chmod +x ziti
 
     #cleanup the download
     rm ziti-linux.tar.gz
 
+    ls -l
+
+    ### copy to /opt
+    mkdir -p /opt/openziti/bin
+    cp ziti /opt/openziti/bin
+    ls -la /opt/openziti/bin
 }
 
 # figure out the link for ziti binary, then call download to get the correct binary.
-upgrade_ziti_router()
+upgrade_ziti()
 {
     upgrade_release="${CONTROLLER_VERSION:1}"
     echo -e "Upgrading ziti version to ${upgrade_release}"
@@ -135,17 +156,24 @@ cd /etc/netfoundry/
 aarch=$(uname -m)
 echo $aarch
 CERT_FILE="certs/client.cert"
+
 if [[ -n "${REG_KEY:-}" ]]; then
+    # user supplied Registration KEY
     if [[ -s "${CERT_FILE}" ]]; then
+        # there is certificate file already, so we ignore the reg key.
         echo "INFO: Found cert file ${CERT_FILE}"
-        echo " do we need to overwrite? "
+        echo "      REG key ignored."
     else
         echo REGKEY: $REG_KEY
+
+        # contact console to get router information.
         response=$(curl -k -d -H "Content-Type: application/json" -X POST https://gateway.production.netfoundry.io/core/v2/edge-routers/register/${REG_KEY})
         echo $response >reg_response
         jwt=$(echo $response |jq -r .edgeRouter.jwt)
         networkControllerHost=$(echo $response |jq -r .networkControllerHost)
-	if [[ $aarch == "aarch64" ]]; then
+
+        # get the link to the binary based on the architecture.
+        if [[ $aarch == "aarch64" ]]; then
             upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxARM64)
         elif [[ $aarch == "armv7l" ]]; then
             upgradelink=$(echo ${response} | jq -r .productMetadata.zitiBinaryBundleLinuxARM)
@@ -156,13 +184,22 @@ if [[ -n "${REG_KEY:-}" ]]; then
         #echo $networkControllerHost
         #echo $upgradelink
 
+        # need to figure out CONTROLLER verion
+        CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
+        
+        if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
+            CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
+        else
+            echo "!!!!!!!!!!Retrieve controller verion Failed."
+        fi
+
         # download the binaries
         download_ziti_binary
         # create router config
         create_router_config
         # save jwt retrieved from console, and register router
         echo $jwt > docker.jwt
-        ziti/ziti router enroll config.yml -j docker.jwt
+        /opt/openziti/bin/ziti router enroll config.yml -j docker.jwt
     fi
 else
     if [[ -s "${CERT_FILE}" ]]; then
@@ -177,8 +214,15 @@ fi
 # now check if edge router version is same as controller
 get_controller_version
 
-if [[ -f "ziti/ziti" ]]; then
-    ZITI_VERSION=$(ziti/ziti -v 2>/dev/null)
+# copy the ziti local copy (on the host) to /opt/openziti/bin .
+if [[ ! -f "/opt/openziti/bin/ziti" ]] && [ -f "ziti" ]; then
+    echo "Copy saved ziti file to execute dir"
+    mkdir -p /opt/openziti/bin
+    cp ziti /opt/openziti/bin
+fi
+
+if [[ -f "/opt/openziti/bin/ziti" ]]; then
+    ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
 else
     ZITI_VERSION="Not Found"
 fi
@@ -189,12 +233,20 @@ echo Router version: $ZITI_VERSION
 if [ "$CONTROLLER_VERSION" == "$ZITI_VERSION" ]; then
     echo "Ziti version match, no download necessary"
 else
-    upgrade_ziti_router
+    upgrade_ziti
 fi
 
 echo "INFO: running ziti-router"
-ZITI_VERSION=$(ziti/ziti -v 2>/dev/null)
-ziti/ziti router run config.yml >$LOGFILE 2>&1 &
+
+# turn on the verbose mode if user defines it
+if [ -z "$VERBOSE" ]; then
+   OPS=""
+else
+   OPS="-v"
+fi
+
+ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
+/opt/openziti/bin/ziti router run config.yml $OPS &
 
 set -x
 while true; do
@@ -206,10 +258,10 @@ while true; do
     else
         if [ "$CONTROLLER_VERSION" != "$ZITI_VERSION" ]; then
             pkill ziti
-            upgrade_ziti_router
-            ZITI_VERSION=$(ziti/ziti -v 2>/dev/null)
+            upgrade_ziti
+            ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
             echo "INFO: restarting ziti-router"
-            ziti/ziti router run config.yml >>$LOGFILE 2>&1 &
+            /opt/openziti/bin/ziti router run config.yml $OPS &
         fi
     fi
 done
