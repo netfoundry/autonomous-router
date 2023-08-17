@@ -61,7 +61,19 @@ create_router_config()
     
 
     ls -la /opt/openziti/bin
-    /opt/openziti/bin/ziti create config router edge --private -n "docker" -o config.yml
+    cd /opt/openziti/bin
+    ./ziti create config router edge --private -n "docker" -o /etc/netfoundry/config.yml
+
+    # append health check
+    cat << EOF >> /etc/netfoundry/config.yml
+web:
+- name: health-check
+  bindPoints:
+    - interface: 0.0.0.0:8081
+      address: 0.0.0.0:8081
+  apis:
+    - binding: health-checks
+EOF
 }
 
 get_controller_version()
@@ -201,8 +213,9 @@ if [[ -n "${REG_KEY:-}" ]]; then
         # create router config
         create_router_config
         # save jwt retrieved from console, and register router
-        echo $jwt > docker.jwt
-        /opt/openziti/bin/ziti router enroll config.yml -j docker.jwt
+        echo $jwt > /etc/netfoundry/docker.jwt
+        cd /opt/openziti/bin
+        ./ziti router enroll /etc/netfoundry/config.yml -j /etc/netfoundry/docker.jwt
     fi
 else
     if [[ -s "${CERT_FILE}" ]]; then
@@ -225,7 +238,8 @@ if [[ ! -f "/opt/openziti/bin/ziti" ]] && [ -f "ziti" ]; then
 fi
 
 if [[ -f "/opt/openziti/bin/ziti" ]]; then
-    ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
+    cd /opt/openziti/bin
+    ZITI_VERSION=$(./ziti -v 2>/dev/null)
 else
     ZITI_VERSION="Not Found"
 fi
@@ -248,8 +262,9 @@ else
    OPS="-v"
 fi
 
-ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
-/opt/openziti/bin/ziti router run config.yml $OPS &
+cd /opt/openziti/bin
+ZITI_VERSION=$(./ziti -v 2>/dev/null)
+./ziti router run /etc/netfoundry/config.yml $OPS &
 
 set -x
 while true; do
@@ -262,9 +277,10 @@ while true; do
         if [ "$CONTROLLER_VERSION" != "$ZITI_VERSION" ]; then
             pkill ziti
             upgrade_ziti
-            ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
+            cd /opt/openziti/bin
+            ZITI_VERSION=$(./ziti -v 2>/dev/null)
             echo "INFO: restarting ziti-router"
-            /opt/openziti/bin/ziti router run config.yml $OPS &
+            ./ziti router run /etc/netfoundry/config.yml $OPS &
         fi
     fi
 
@@ -274,7 +290,8 @@ while true; do
         echo ziti is running
     else
         # ziti not running, restart
-        /opt/openziti/bin/ziti router run config.yml $OPS &
+        cd /opt/openziti/bin
+        ./ziti router run /etc/netfoundry/config.yml $OPS &
     fi
 done
     
