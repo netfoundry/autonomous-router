@@ -26,6 +26,10 @@
 #    docker logs -f <container>
 # monitor ziti process, if process goes away, restart it
 
+# 10/26/2023
+# add health check config
+# add proxy support, with environmental varibale "HTTPS_PROXY"
+
 set -e -o pipefail
 
 LOGFILE="ziti-router.log"
@@ -60,12 +64,10 @@ create_router_config()
     export ZITI_ROUTER_PORT=443
     
 
-    ls -la /opt/openziti/bin
-    cd /opt/openziti/bin
-    ./ziti create config router edge --private -n "docker" -o /etc/netfoundry/config.yml
+    /opt/openziti/bin/ziti create config router edge --private -n "docker" -o config.yml
 
     # append health check
-    cat << EOF >> /etc/netfoundry/config.yml
+    cat << EOF >> config.yml
 web:
 - name: health-check
   bindPoints:
@@ -74,6 +76,23 @@ web:
   apis:
     - binding: health-checks
 EOF
+
+    # append proxy setting if exist
+    if [[ -n "${HTTPS_PROXY:-}" ]]; then
+        PROXY_TYPE=$(echo $HTTPS_PROXY |awk -F ':' '{print $1}')
+        PROXY_ADDRESS=$(echo $HTTPS_PROXY |awk -F ':' '{print $2}')
+        PROXY_ADDRESS=$(echo $PROXY_ADDRESS |awk -F '/' '{print $3}')
+        PROXY_PORT=$(echo $HTTPS_PROXY |awk -F ':' '{print $3}')
+        #echo TYPE: $PROXY_TYPE
+        #echo ADDRESS: $PROXY_ADDRESS
+        #echo PORT: $PROXY_PORT
+
+        cat << EOF2 >> config.yml
+proxy:
+  type: ${PROXY_TYPE}
+  address: ${PROXY_ADDRESS}:${PROXY_PORT}
+EOF2
+    fi
 }
 
 get_controller_version()
@@ -213,9 +232,8 @@ if [[ -n "${REG_KEY:-}" ]]; then
         # create router config
         create_router_config
         # save jwt retrieved from console, and register router
-        echo $jwt > /etc/netfoundry/docker.jwt
-        cd /opt/openziti/bin
-        ./ziti router enroll /etc/netfoundry/config.yml -j /etc/netfoundry/docker.jwt
+        echo $jwt > docker.jwt
+        /opt/openziti/bin/ziti router enroll config.yml -j docker.jwt
     fi
 else
     if [[ -s "${CERT_FILE}" ]]; then
@@ -238,8 +256,7 @@ if [[ ! -f "/opt/openziti/bin/ziti" ]] && [ -f "ziti" ]; then
 fi
 
 if [[ -f "/opt/openziti/bin/ziti" ]]; then
-    cd /opt/openziti/bin
-    ZITI_VERSION=$(./ziti -v 2>/dev/null)
+    ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
 else
     ZITI_VERSION="Not Found"
 fi
@@ -262,9 +279,8 @@ else
    OPS="-v"
 fi
 
-cd /opt/openziti/bin
-ZITI_VERSION=$(./ziti -v 2>/dev/null)
-./ziti router run /etc/netfoundry/config.yml $OPS &
+ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
+/opt/openziti/bin/ziti router run config.yml $OPS &
 
 set -x
 while true; do
@@ -277,10 +293,9 @@ while true; do
         if [ "$CONTROLLER_VERSION" != "$ZITI_VERSION" ]; then
             pkill ziti
             upgrade_ziti
-            cd /opt/openziti/bin
-            ZITI_VERSION=$(./ziti -v 2>/dev/null)
+            ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
             echo "INFO: restarting ziti-router"
-            ./ziti router run /etc/netfoundry/config.yml $OPS &
+            /opt/openziti/bin/ziti router run config.yml $OPS &
         fi
     fi
 
@@ -290,8 +305,7 @@ while true; do
         echo ziti is running
     else
         # ziti not running, restart
-        cd /opt/openziti/bin
-        ./ziti router run /etc/netfoundry/config.yml $OPS &
+        /opt/openziti/bin/ziti router run config.yml $OPS &
     fi
 done
     

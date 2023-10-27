@@ -15,8 +15,16 @@
 if you want to run router in verbose mode:
 * docker run -v /home/ziggy/router2/:/etc/netfoundry/ --env REG_KEY=<Registration Key> --env VERBOSE=1 <image_name>
 
+if you want to run ziti with proxy server:
+* docker run -v /home/ziggy/router2/:/etc/netfoundry/ --env REG_KEY=<Registration Key> --env HTTPS_PROXY=<proxy_address> <image_name>
+
+**proxy_address** should be in this format: http://<address>:<port>
+for example: http://10.20.30.40:3120
+
 
 ## docker-entrypoint-for-config.sh ##
+
+** This script is no longer in use, it is here for legacy reference only **
 
 ### Dockerfile change ###
 add ziti-router binary to docker file:
