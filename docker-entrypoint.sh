@@ -50,10 +50,16 @@ create_router_config()
 
     #define the address for controller (getting from console)
     export ZITI_CTRL_ADVERTISED_ADDRESS=${networkControllerHost}
-    #controller port (default)
-    export ZITI_CTRL_PORT="80"
-    # 0.29.0 renamed environment variable
-    export ZITI_CTRL_ADVERTISED_PORT="80"
+    
+    # For 0.30.0 and above, the ctrl port is 443
+    ziti_dot_version=$(echo $zitiVersion| awk -F "." '{print $2}')
+    if [ "$ziti_dot_version" -lt "30" ]; then
+        export ZITI_CTRL_PORT="80"
+        # 0.29.0 renamed environment variable
+        export ZITI_CTRL_ADVERTISED_PORT="80"
+    else
+        export ZITI_CTRL_ADVERTISED_PORT="443"
+    fi 
 
     # router ip and port to put in config
     export ZITI_EDGE_ROUTER_IP_OVERRIDE=${localip}
@@ -217,6 +223,9 @@ if [[ -n "${REG_KEY:-}" ]]; then
         #echo $jwt
         #echo $networkControllerHost
         #echo $upgradelink
+
+        # get the ziti version
+        zitiVersion=$(echo $response |jq -r .productMetadata.zitiVersion)
 
         # need to figure out CONTROLLER verion
         CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
