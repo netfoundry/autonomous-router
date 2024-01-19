@@ -30,6 +30,9 @@
 # add health check config
 # add proxy support, with environmental varibale "HTTPS_PROXY"
 
+# 01/19/2024
+# user ziti_auto_enroll.py to generate router config
+
 set -e -o pipefail
 
 LOGFILE="ziti-router.log"
@@ -38,52 +41,9 @@ LOGFILE="ziti-router.log"
 # this will be edge only with tunnerl in host mode
 create_router_config()
 {
-    # this is ip we going to use
-    localip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+    mkdir -p /etc/netfoundry/certs
 
-    #define identity
-    mkdir -p certs
-    export ZITI_ROUTER_IDENTITY_CERT="certs/client.cert"
-    export ZITI_ROUTER_IDENTITY_SERVER_CERT="certs/server.cert"
-    export ZITI_ROUTER_IDENTITY_KEY="certs/server.key"
-    export ZITI_ROUTER_IDENTITY_CA="certs/cas.cert"
-
-    #define the address for controller (getting from console)
-    export ZITI_CTRL_ADVERTISED_ADDRESS=${networkControllerHost}
-    
-    # For 0.30.0 and above, the ctrl port is 443
-    ziti_dot_version=$(echo $zitiVersion| awk -F "." '{print $2}')
-    if [ "$ziti_dot_version" -lt "30" ]; then
-        export ZITI_CTRL_PORT="80"
-        # 0.29.0 renamed environment variable
-        export ZITI_CTRL_ADVERTISED_PORT="80"
-    else
-        export ZITI_CTRL_ADVERTISED_PORT="443"
-    fi 
-
-    # router ip and port to put in config
-    export ZITI_EDGE_ROUTER_IP_OVERRIDE=${localip}
-    export ZITI_EDGE_ROUTER_PORT=443
-
-    # 0.29.0 renamed environment variable
-    export ZITI_ROUTER_IP_OVERRIDE=${localip}
-    export ZITI_ROUTER_PORT=443
-    
-
-    /opt/openziti/bin/ziti create config router edge --private -n "docker" -o config.yml
-
-    # append health check
-    cat << EOF >> config.yml
-web:
-- name: health-check
-  bindPoints:
-    - interface: 0.0.0.0:8081
-      address: 0.0.0.0:8081
-  apis:
-    - binding: health-checks
-EOF
-
-    # append proxy setting if exist
+    # create proxy setting if exist
     if [[ -n "${HTTPS_PROXY:-}" ]]; then
         PROXY_TYPE=$(echo $HTTPS_PROXY |awk -F ':' '{print $1}')
         PROXY_ADDRESS=$(echo $HTTPS_PROXY |awk -F ':' '{print $2}')
@@ -93,11 +53,12 @@ EOF
         #echo ADDRESS: $PROXY_ADDRESS
         #echo PORT: $PROXY_PORT
 
-        cat << EOF2 >> config.yml
-proxy:
-  type: ${PROXY_TYPE}
-  address: ${PROXY_ADDRESS}:${PROXY_PORT}
-EOF2
+        python3 /ziti_router_auto_enroll.py -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT -p >/etc/netfoundry/config.yml
+
+    else
+        python3 /ziti_router_auto_enroll.py -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        -p >/etc/netfoundry/config.yml
     fi
 }
 
@@ -238,10 +199,13 @@ if [[ -n "${REG_KEY:-}" ]]; then
 
         # download the binaries
         download_ziti_binary
-        # create router config
-        create_router_config
+        
         # save jwt retrieved from console, and register router
         echo $jwt > docker.jwt
+
+        # create router config
+        create_router_config
+
         /opt/openziti/bin/ziti router enroll config.yml -j docker.jwt
     fi
 else
