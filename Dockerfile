@@ -7,7 +7,7 @@ RUN apt install -y procps
 RUN apt install -y iproute2
 RUN apt install -y python3
 RUN apt install -y pip
-RUN pip install requests pylint pylint-exit pyinstaller tqdm psutil packaging pyjwt colorama jinja2 distro pyyaml 
+RUN pip install -r https://raw.githubusercontent.com/netfoundry/ziti_router_auto_enroll/main/requirements.txt
 
 ADD https://raw.githubusercontent.com/netfoundry/ziti_router_auto_enroll/main/ziti_router_auto_enroll.py /
 
