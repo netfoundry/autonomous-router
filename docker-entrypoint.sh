@@ -42,6 +42,13 @@ LOGFILE="ziti-router.log"
 create_router_config()
 {
     mkdir -p /etc/netfoundry/certs
+    # For 0.30.0 and above, the ctrl port is 443
+    ziti_dot_version=$(echo $zitiVersion| awk -F "." '{print $2}')
+    if [ "$ziti_dot_version" -lt "30" ]; then
+        ZITI_CTRL_ADVERTISED_PORT="80"
+    else
+        ZITI_CTRL_ADVERTISED_PORT="443"
+    fi 
 
     # create proxy setting if exist
     if [[ -n "${HTTPS_PROXY:-}" ]]; then
@@ -54,10 +61,12 @@ create_router_config()
         #echo PORT: $PROXY_PORT
 
         python3 /ziti_router_auto_enroll.py -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
         --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT -p >/etc/netfoundry/config.yml
 
     else
         python3 /ziti_router_auto_enroll.py -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
         -p >/etc/netfoundry/config.yml
     fi
 }
@@ -156,7 +165,7 @@ cd /etc/netfoundry/
 
 aarch=$(uname -m)
 echo $aarch
-CERT_FILE="certs/client.cert"
+CERT_FILE="certs/cert.pem"
 
 if [[ -n "${REG_KEY:-}" ]]; then
     # user supplied Registration KEY
