@@ -33,6 +33,9 @@
 # 01/19/2024
 # user ziti_auto_enroll.py to generate router config
 
+# 04/25/2024
+# fix issue with 1.0.0 release.
+
 set -e -o pipefail
 
 LOGFILE="ziti-router.log"
@@ -43,8 +46,10 @@ create_router_config()
 {
     mkdir -p /etc/netfoundry/certs
     # For 0.30.0 and above, the ctrl port is 443
+    ziti_main_version=$(echo $zitiVersion| awk -F "." '{print $1}')
     ziti_dot_version=$(echo $zitiVersion| awk -F "." '{print $2}')
-    if [ "$ziti_dot_version" -lt "30" ]; then
+    
+    if [ "$ziti_main_version" -lt "1" ] && [ "$ziti_dot_version" -lt "30" ]; then
         ZITI_CTRL_ADVERTISED_PORT="80"
     else
         ZITI_CTRL_ADVERTISED_PORT="443"
@@ -111,9 +116,18 @@ download_ziti_binary()
     rm -f ziti
 
     #base on the verion, we extract the right ziti out of the tarball
+    controller_main_version=$(echo $CONTROLLER_VERSION| awk -F "." '{print $1}')
+    # strip off v
+    controller_main_version=$(echo "${controller_main_version//v}")
     controller_dot_version=$(echo $CONTROLLER_VERSION| awk -F "." '{print $2}')
+    
+    # do not continue if the version is not supported.
+    if [ "$controller_main_version" -lt "1" ]  && [ "$controller_dot_version" -lt "27" ]; then
+        echo "Your version is not supported"
+        exit 1
+    fi
 
-    if [ "$controller_dot_version" -lt "29" ]; then
+    if [ "$controller_main_version" -lt "1" ]  && [ "$controller_dot_version" -lt "29" ]; then
         tar xf ziti-linux.tar.gz ziti/ziti --strip-components 1
     else
         tar xf ziti-linux.tar.gz ziti
