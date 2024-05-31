@@ -8,6 +8,7 @@ RUN apt install -y iproute2
 RUN apt install -y python3
 RUN apt install -y pip
 RUN pip install -r https://raw.githubusercontent.com/netfoundry/ziti_router_auto_enroll/main/requirements.txt
+RUN apt update && apt-get install -y
 
 ADD https://raw.githubusercontent.com/netfoundry/ziti_router_auto_enroll/main/ziti_router_auto_enroll.py /
 

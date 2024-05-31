@@ -36,6 +36,9 @@
 # 04/25/2024
 # fix issue with 1.0.0 release.
 
+# 05/30/2024
+# harden the detection of registrion by adding the old cert file
+
 set -e -o pipefail
 
 LOGFILE="ziti-router.log"
@@ -180,12 +183,17 @@ cd /etc/netfoundry/
 aarch=$(uname -m)
 echo $aarch
 CERT_FILE="certs/cert.pem"
+CERT_FILE_OLD="certs/client.cert"
 
 if [[ -n "${REG_KEY:-}" ]]; then
     # user supplied Registration KEY
     if [[ -s "${CERT_FILE}" ]]; then
         # there is certificate file already, so we ignore the reg key.
         echo "INFO: Found cert file ${CERT_FILE}"
+        echo "      REG key ignored."
+    elif [[ -s "${CERT_FILE_OLD}" ]]; then
+        # there is certificate file already, so we ignore the reg key.
+        echo "INFO: Found cert file ${CERT_FILE_OLD}"
         echo "      REG key ignored."
     else
         echo REGKEY: $REG_KEY
@@ -232,7 +240,7 @@ if [[ -n "${REG_KEY:-}" ]]; then
         /opt/openziti/bin/ziti router enroll config.yml -j docker.jwt
     fi
 else
-    if [[ -s "${CERT_FILE}" ]]; then
+    if [[ -s "${CERT_FILE}" || -s "${CERT_FILE_OLD}" ]]; then
         echo "INFO: Found cert file"
     else
         echo "ERROR: Need to specify REG_KEY for registration"
