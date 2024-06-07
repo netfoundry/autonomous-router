@@ -68,12 +68,12 @@ create_router_config()
         #echo ADDRESS: $PROXY_ADDRESS
         #echo PORT: $PROXY_PORT
 
-        python3 /ziti_router_auto_enroll.py -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
         --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
         --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT -p >/etc/netfoundry/config.yml
 
     else
-        python3 /ziti_router_auto_enroll.py -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
         --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
         -p >/etc/netfoundry/config.yml
     fi
