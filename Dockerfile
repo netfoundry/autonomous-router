@@ -1,20 +1,19 @@
-FROM ubuntu:jammy
+FROM ubuntu:jammy as build
 
 RUN apt update && apt-get install -y
-RUN apt install -y jq
-RUN apt install -y curl
-RUN apt install -y procps
-RUN apt install -y iproute2
-RUN apt install -y python3
-RUN apt install -y pip
+RUN apt install -y jq curl procps iproute2 python3 pip
 RUN pip install -r https://raw.githubusercontent.com/netfoundry/ziti_router_auto_enroll/main/requirements.txt
-RUN apt update && apt-get install -y
 
 ADD https://raw.githubusercontent.com/netfoundry/ziti_router_auto_enroll/main/ziti_router_auto_enroll.py /
+
+RUN pyinstaller -F /ziti_router_auto_enroll.py
 
 #RUN mkdir -p /opt/netfoundry/ziti/ziti-router
 #ADD ziti-router /opt/netfoundry/ziti/ziti-router/
 
+FROM cgr.dev/chainguard/wolfi-base
+RUN apk update && apk add --no-cache --update-cache bash curl jq iproute2
+COPY --from=build /dist/ziti_router_auto_enroll /
 COPY ./docker-entrypoint.sh /
 RUN chmod +x /docker-entrypoint.sh
 
