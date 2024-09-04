@@ -107,7 +107,11 @@ get_controller_version()
 # download ziti binary from the link saved in "upgradelink"
 download_ziti_binary()
 {
-    
+    if [ -n "{$OVERRIDE_DOWNLOAD_URL:-}" ]
+    then
+        upgradelink=$OVERRIDE_DOWNLOAD_URL
+    fi
+
     echo -e "version link: ${upgradelink}"
 
     rm -f ziti-linux.tar.gz
@@ -285,6 +289,13 @@ fi
 
 ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
 /opt/openziti/bin/ziti router run config.yml $OPS &
+
+if [ -n "{$NO_AUTO_UPGRADE:-}" ]
+then
+    # no auto upgrade, just run the router and exit if it crashes
+    /opt/openziti/bin/ziti router run config.yml $OPS
+    exit $?
+fi
 
 set -x
 while true; do
