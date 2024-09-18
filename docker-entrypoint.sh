@@ -262,7 +262,9 @@ if [[ -n "${REG_KEY:-}" ]]; then
         zitiVersion=$(echo $response |jq -r .productMetadata.zitiVersion)
 
         # need to figure out CONTROLLER verion
-        CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
+        #CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
+        # for ha, we will need to use different endpoint.
+        CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/client/v1/version")
         
         if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
             CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
