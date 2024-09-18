@@ -39,13 +39,19 @@
 # 05/30/2024
 # harden the detection of registrion by adding the old cert file
 
+# 09/17/2024
+# Version: 1.0. Support V8 network and lower environment for registration.
+#               Also use ziti_auto_enroll to download binary also.
+
+VERSION="1.0"
+
 set -e -o pipefail
 
 LOGFILE="ziti-router.log"
 
-# create router config for docker
+# register router
 # this will be edge only with tunnerl in host mode
-create_router_config()
+register_router()
 {
     mkdir -p /etc/netfoundry/certs
     # For 0.30.0 and above, the ctrl port is 443
@@ -70,12 +76,13 @@ create_router_config()
 
         /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
         --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
-        --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT -p >/etc/netfoundry/config.yml
+        --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT \
+        --downloadUrl $upgradelink --skipSystemd
 
     else
         /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
         --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
-        -p >/etc/netfoundry/config.yml
+        --downloadUrl $upgradelink --skipSystemd
     fi
 }
 
@@ -178,6 +185,8 @@ upgrade_ziti()
 # main code starts here
 #
 # look to see if the ziti-router is already registered
+echo Version: $VERSION
+
 cd /etc/netfoundry/
 
 aarch=$(uname -m)
@@ -198,8 +207,41 @@ if [[ -n "${REG_KEY:-}" ]]; then
     else
         echo REGKEY: $REG_KEY
 
+        firsttwo="${REG_KEY:0:2}"
+        length=${#REG_KEY}
+
+        # check which network the key comes from
+        if [[ $length == "11" ]]; then
+            # V8 production network
+            reg_url="https://gateway.production.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+        elif [[ $length == "10" ]]; then
+            # V7 production network
+            reg_url="https://gateway.production.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
+        elif [[ $firsttwo == "SA" ]]; then
+            if [[ $length == "12" ]]; then
+                reg_url="https://gateway.sandbox.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
+            elif [[ $length == "13" ]]; then
+                reg_url="https://gateway.sandox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+            else
+                echo Sandbox Registration code: $REGKEY is not correct, Length: $length
+                exit
+            fi
+        elif [[ $firsttwo == "ST" ]]; then
+                if [[ $length == "12" ]]; then
+                reg_url="https://gateway.staging.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
+            elif [[ $length == "13" ]]; then
+                reg_url="https://gateway.staging.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+            else
+                    echo Staging Registration code: $REGKEY is not correct, Length: $length
+                exit
+                fi
+        else
+                echo Registration code: $REGKEY is not correct, Length: $length
+            exit
+        fi
+
         # contact console to get router information.
-        response=$(curl -k -d -H "Content-Type: application/json" -X POST https://gateway.production.netfoundry.io/core/v2/edge-routers/register/${REG_KEY})
+        response=$(curl -k -d -H "Content-Type: application/json" -X POST ${reg_url})
         echo $response >reg_response
         jwt=$(echo $response |jq -r .edgeRouter.jwt)
         networkControllerHost=$(echo $response |jq -r .networkControllerHost)
@@ -228,16 +270,12 @@ if [[ -n "${REG_KEY:-}" ]]; then
             echo "!!!!!!!!!!Retrieve controller verion Failed."
         fi
 
-        # download the binaries
-        download_ziti_binary
-        
         # save jwt retrieved from console, and register router
         echo $jwt > docker.jwt
 
         # create router config
-        create_router_config
+        register_router
 
-        /opt/openziti/bin/ziti router enroll config.yml -j docker.jwt
     fi
 else
     if [[ -s "${CERT_FILE}" || -s "${CERT_FILE_OLD}" ]]; then
@@ -283,6 +321,8 @@ else
    OPS="-v"
 fi
 
+# if we get here, we are running the autonomous router in normal mode
+echo "Autonomous router mode"
 ZITI_VERSION=$(/opt/openziti/bin/ziti -v 2>/dev/null)
 /opt/openziti/bin/ziti router run config.yml $OPS &
 
@@ -304,7 +344,7 @@ while true; do
     fi
 
     ## check if ziti is running or not
-    if pgrep -x "ziti" > /dev/null
+    if pgrep -x "/opt/openziti/bin/ziti" > /dev/null
     then
         echo ziti is running
     else
