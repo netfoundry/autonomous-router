@@ -47,7 +47,7 @@
 # Version 1.1: Use the "client" endpoint to do the query.
 
 # 05/20/2025
-# Version 1.2: Support advertise a different address. Environmental variable "ADVERTISE_IP"
+# Version 1.2: Support advertise a different address. Environmental variable "ADVERTISE_ADDRESS"
 
 VERSION="1.2"
 
@@ -83,8 +83,8 @@ register_router()
         PROXY_REG_STRING=""
     fi
 
-    if [[ -n "${ADVERTISE_IP:-}" ]]; then
-        ADVERTISE_REG_STRING="--edgeListeners tls:0.0.0.0:443 ${ADVERTISE_IP}:443"
+    if [[ -n "${ADVERTISE_ADDRESS:-}" ]]; then
+        ADVERTISE_REG_STRING="--edgeListeners tls:0.0.0.0:443 ${ADVERTISE_ADDRESS}:443"
     else
         ADVERTISE_REG_STRING=""
     fi
