@@ -28,7 +28,7 @@
 
 # 10/26/2023
 # add health check config
-# add proxy support, with environmental varibale "HTTPS_PROXY"
+# add proxy support, with environmental variable "HTTPS_PROXY"
 
 # 01/19/2024
 # user ziti_auto_enroll.py to generate router config
@@ -37,20 +37,24 @@
 # fix issue with 1.0.0 release.
 
 # 05/30/2024
-# harden the detection of registrion by adding the old cert file
+# harden the detection of registration by adding the old cert file
 
 # 09/17/2024
-# Version: 1.0. Support V8 network and lower environment for registration.
+# Version 1.0: Support V8 network and lower environment for registration.
 #               Also use ziti_auto_enroll to download binary also.
 
-VERSION="1.0"
+# 09/18/2024
+# Version 1.1: Use the "client" endpoint to do the query.
+
+# 05/20/2025
+# Version 1.2: Support advertise a different address. Environmental variable "ADVERTISE_IP"
+
+VERSION="1.2"
 
 set -e -o pipefail
 
-LOGFILE="ziti-router.log"
-
 # register router
-# this will be edge only with tunnerl in host mode
+# this will be edge only with tunnel in host mode
 register_router()
 {
     mkdir -p /etc/netfoundry/certs
@@ -74,21 +78,26 @@ register_router()
         #echo ADDRESS: $PROXY_ADDRESS
         #echo PORT: $PROXY_PORT
 
-        /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
-        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
-        --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT \
-        --downloadUrl $upgradelink --skipSystemd
-
+        PROXY_REG_STRING="--proxyType ${PROXY_TYPE} --proxyAddress ${PROXY_ADDRESS} --proxyPort ${PROXY_PORT}"
     else
-        /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
-        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
-        --downloadUrl $upgradelink --skipSystemd
+        PROXY_REG_STRING=""
     fi
+
+    if [[ -n "${ADVERTISE_IP:-}" ]]; then
+        ADVERTISE_REG_STRING="--edgeListeners tls:0.0.0.0:443 ${ADVERTISE_IP}:443"
+    else
+        ADVERTISE_REG_STRING=""
+    fi
+
+    /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
+        ${PROXY_REG_STRING} ${ADVERTISE_REG_STRING}\
+        --downloadUrl $upgradelink --skipSystemd
 }
 
 get_controller_version()
 {
-    echo "Check ziti controller verion"
+    echo "Check ziti controller version"
     CONTROLLER_ADDRESS=$(cat config.yml |  grep "endpoint" |awk -F ':' '{print $3}')
 
     echo -e "controller_address: ${CONTROLLER_ADDRESS}"
@@ -104,7 +113,7 @@ get_controller_version()
         if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
             CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
         else
-            echo "!!!!!!!!!!Retrieve controller verion Failed."
+            echo "!!!!!!!!!!Retrieve controller version Failed."
         fi
 
     fi
@@ -126,7 +135,7 @@ download_ziti_binary()
 
     rm -f ziti
 
-    #base on the verion, we extract the right ziti out of the tarball
+    #base on the version, we extract the right ziti out of the tarball
     controller_main_version=$(echo $CONTROLLER_VERSION| awk -F "." '{print $1}')
     # strip off v
     controller_main_version=$(echo "${controller_main_version//v}")
@@ -224,7 +233,7 @@ if [[ -n "${REG_KEY:-}" ]]; then
             elif [[ $length == "13" ]]; then
                 reg_url="https://gateway.sandox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
             else
-                echo Sandbox Registration code: $REGKEY is not correct, Length: $length
+                echo Sandbox Registration code: $REG_KEY is not correct, Length: $length
                 exit
             fi
         elif [[ $firsttwo == "ST" ]]; then
@@ -233,11 +242,11 @@ if [[ -n "${REG_KEY:-}" ]]; then
             elif [[ $length == "13" ]]; then
                 reg_url="https://gateway.staging.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
             else
-                    echo Staging Registration code: $REGKEY is not correct, Length: $length
+                    echo Staging Registration code: $REG_KEY is not correct, Length: $length
                 exit
                 fi
         else
-                echo Registration code: $REGKEY is not correct, Length: $length
+                echo Registration code: $REG_KEY is not correct, Length: $length
             exit
         fi
 
@@ -262,7 +271,7 @@ if [[ -n "${REG_KEY:-}" ]]; then
         # get the ziti version
         zitiVersion=$(echo $response |jq -r .productMetadata.zitiVersion)
 
-        # need to figure out CONTROLLER verion
+        # need to figure out CONTROLLER version
         #CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
         # for ha, we will need to use different endpoint.
         CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/client/v1/version")
@@ -270,7 +279,7 @@ if [[ -n "${REG_KEY:-}" ]]; then
         if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
             CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
         else
-            echo "!!!!!!!!!!Retrieve controller verion Failed."
+            echo "!!!!!!!!!!Retrieve controller version Failed."
         fi
 
         # save jwt retrieved from console, and register router
