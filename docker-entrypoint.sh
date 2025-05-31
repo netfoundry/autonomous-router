@@ -49,7 +49,11 @@
 # 05/20/2025
 # Version 1.2: Support advertise a different address. Environmental variable "ADVERTISE_ADDRESS"
 
-VERSION="1.2"
+# 05/30/2025
+# Version 1.3: Support automatically setup tunnel. Environmental variable "TUNNEL_MODE"
+#    also fixed the sandbox v8 registration link
+
+VERSION="1.3"
 
 set -e -o pipefail
 
@@ -89,7 +93,17 @@ register_router()
         ADVERTISE_REG_STRING=""
     fi
 
-    /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+    TUNNEL_OPTION="--tunnelListener 'host'"
+
+    if [[ -n "${TUNNEL_MODE:-}" ]]; then
+        if [[ ${TUNNEL_MODE} == "auto" ]]; then
+            TUNNEL_OPTION="--autoTunnelListener"
+        else
+            echo "Unknown TUNNEL_MODE options: ${TUNNEL_MODE}, use default host mode instead"
+        fi
+    fi
+
+    /ziti_router_auto_enroll -n -j docker.jwt ${TUNNEL_OPTION} --installDir /etc/netfoundry \
         --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
         ${PROXY_REG_STRING} ${ADVERTISE_REG_STRING}\
         --downloadUrl $upgradelink --skipSystemd
@@ -231,7 +245,7 @@ if [[ -n "${REG_KEY:-}" ]]; then
             if [[ $length == "12" ]]; then
                 reg_url="https://gateway.sandbox.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
             elif [[ $length == "13" ]]; then
-                reg_url="https://gateway.sandox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+                reg_url="https://gateway.sandbox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
             else
                 echo Sandbox Registration code: $REG_KEY is not correct, Length: $length
                 exit

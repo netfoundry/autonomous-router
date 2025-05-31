@@ -1,0 +1,50 @@
+To setup the docker container to intercept traffic, you will need to use the 
+host network for the container (network_mode: host). This also means you can
+only run one instance of such container.
+
+The container also need to be privileged. (NET_ADMIN) 
+
+Set the TUNNEL_MODE to "auto".
+
+For DNS intercepts, set the local IP to be the first resolver.
+
+Here is a example docker-compose.yaml file
+
+--
+services:
+  autonomous-er:
+    container_name: netfoundry-er
+    image: netfoundry/autonomous-router:v1.3
+    # or image: netfoundry/netfoundry-router:latest
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VERBOSE=1
+      - REG_KEY=<registration_key from console>
+      - TUNNEL_MODE=auto
+    volumes:
+      - ./ziti_router:/etc/netfoundry
+
+--
+For Ubuntu 24.04 OS, here are the steps to fix the DNS resolver.
+Create a file "/usr/lib/systemd/resolved.conf.d/01-netfoundry.conf"
+$ sudo mkdir /usr/lib/systemd/resolved.conf.d
+$ sudo cat > /usr/lib/systemd/resolved.conf.d/01-netfoundry.conf
+#Netfoundry Added file
+[Resolve]
+DNS=<local IP address, can be retrieved with "ip a" command>
+
+Then restart the "systemd-resolved" services
+$ systemctl restart systemd-resolved.service
+
+Use "resolvectl" to make sure the local address is the first one on the resolver.
+$ resolvectl
+Global
+         Protocols: -LLMNR -mDNS -DNSOverTLS DNSSEC=no/unsupported
+  resolv.conf mode: stub
+Current DNS Server: 10.0.135.223
+       DNS Servers: 10.0.135.223
+
