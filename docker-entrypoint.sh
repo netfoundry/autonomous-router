@@ -56,7 +56,10 @@
 # 06/04/2025
 # Version 1.4: Change "ADVERTISE_ADDRESS" to be "IP:PORT"
 
-VERSION="1.4"
+# 06/11/2025
+# Version 1.5: Rebuild
+
+VERSION="1.5"
 
 set -e -o pipefail
 

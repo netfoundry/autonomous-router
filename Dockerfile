@@ -1,4 +1,4 @@
-FROM ubuntu:jammy as build
+FROM ubuntu:focal AS build
 
 RUN apt update && apt-get install -y
 RUN apt install -y jq curl procps iproute2 python3 pip

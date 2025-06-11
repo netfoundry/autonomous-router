@@ -8,7 +8,7 @@ Set the TUNNEL_MODE to "auto".
 
 For DNS intercepts, set the local IP to be the first resolver.
 
-Here is a example docker-compose.yaml file
+Here is an example docker-compose.yaml file
 
 --
 services:
