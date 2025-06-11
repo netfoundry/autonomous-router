@@ -1,0 +1,45 @@
+This is example to setup intercept on a docker network.
+In this example, we use the network name "docker-network-netfoundry"
+
+For this setup, you can also refer to https://openziti.io/docs/guides/deployments/docker/router#sidecar-example
+for more information.
+
+Make sure the containers setup the "network_mode" to use the autonoumous-er 
+container service.
+
+Also the autonomous-er needs to enroll first before update the dns field.
+
+Here is an example docker-compose.yaml file
+
+--
+networks:
+  docker-network-netfoundry:
+    driver: bridge
+
+services:
+  autonomous-er:
+    container_name: netfoundry-er
+    image: netfoundry/autonomous-router:v1.3
+    # or image: netfoundry/netfoundry-router:latest
+    dns:
+      - 172.18.0.2
+      - 1.1.1.1    # any recursive resolver
+    cap_add:
+      - NET_ADMIN  # required to create TPROXY rules
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - VERBOSE=1
+      - REG_KEY=N2D9WBM6EC
+      - TUNNEL_MODE=auto
+    volumes:
+      - ./ziti_router:/etc/netfoundry
+    networks:
+      - docker-network-netfoundry
+
+  other-docker-client:
+    container_name: docker-cl1
+    image: ubuntu
+    network_mode: service:autonomous-er
+    command: "tail -f /dev/null"
+--

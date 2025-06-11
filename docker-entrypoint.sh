@@ -53,7 +53,13 @@
 # Version 1.3: Support automatically setup tunnel. Environmental variable "TUNNEL_MODE"
 #    also fixed the sandbox v8 registration link
 
-VERSION="1.3"
+# 06/04/2025
+# Version 1.4: Change "ADVERTISE_ADDRESS" to be "IP:PORT"
+
+# 06/11/2025
+# Version 1.5: Rebuild
+
+VERSION="1.5"
 
 set -e -o pipefail
 
@@ -88,7 +94,7 @@ register_router()
     fi
 
     if [[ -n "${ADVERTISE_ADDRESS:-}" ]]; then
-        ADVERTISE_REG_STRING="--edgeListeners tls:0.0.0.0:443 ${ADVERTISE_ADDRESS}:443"
+        ADVERTISE_REG_STRING="--edgeListeners tls:0.0.0.0:443 ${ADVERTISE_ADDRESS}"
     else
         ADVERTISE_REG_STRING=""
     fi

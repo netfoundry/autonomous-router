@@ -1,0 +1,24 @@
+This is an example to advertise different address (and port).
+This is useful to use the container to connect to tunnelers.
+
+Use the "ADVERTISE_ADDRESS" to specify the desired address and port.
+Also make sure map the ports correctly for the container (internal container port is 443).
+
+--
+services:
+  autonomous-er:
+    container_name: netfoundry-er
+    image: netfoundry/autonomous-router:v1.4
+    # or image: netfoundry/netfoundry-router:latest
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "4443:443"
+    environment:
+      - VERBOSE=1
+      - REG_KEY=0MJL5TEENX
+      - ADVERTISE_ADDRESS=44.201.32.209:4443
+    volumes:
+      - ./ziti_router:/etc/netfoundry
+--
+
