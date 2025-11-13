@@ -59,7 +59,10 @@
 # 06/11/2025
 # Version 1.5: Rebuild
 
-VERSION="1.5"
+# 11/13/2025
+# Version 1.6: Add TUNNEL_MODE "proxy" option
+
+VERSION="1.6"
 
 set -e -o pipefail
 
@@ -104,6 +107,8 @@ register_router()
     if [[ -n "${TUNNEL_MODE:-}" ]]; then
         if [[ ${TUNNEL_MODE} == "auto" ]]; then
             TUNNEL_OPTION="--autoTunnelListener"
+        elif [[ ${TUNNEL_MODE} == "proxy" ]]; then
+            TUNNEL_OPTION="--tunnelListener 'proxy'"
         else
             echo "Unknown TUNNEL_MODE options: ${TUNNEL_MODE}, use default host mode instead"
         fi
